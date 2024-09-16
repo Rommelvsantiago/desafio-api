@@ -3,11 +3,51 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreUserRequest;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
+    /**
+     * Register a new user.
+     *
+     * @param \App\Http\Requests\StoreUserRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function register(StoreUserRequest $request)
+    {
+        try {
+            // Criação de um novo usuário
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password), // Criptografa a senha
+            ]);
+
+            // Autentica o usuário recém-criado e gera um token JWT
+            $token = Auth::guard('api')->login($user);
+
+            // Retorna uma resposta com o usuário e o token
+            return response()->json([
+                'message' => 'User Created Successfully',
+                'user' => $user,
+                'access_token' => $token,
+                'token_type' => 'bearer',
+                'expires_in' => auth('api')->factory()->getTTL() * 60
+            ], 201);
+
+        } catch (\Exception $ex) {
+            // Captura exceções e retorna uma mensagem de erro
+            return response()->json([
+                'error_message' => $ex->getMessage(),
+                'status' => $ex->getCode()
+            ], 400);
+        }
+    }
+
     /**
      * Get a JWT via given credentials.
      *
@@ -41,9 +81,7 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         $token = $request->headers->all()['authorization'][0];
-
         $responseToken = $this->respondWithToken($token)->original;
-        // $responseToken["access_token"] = substr($responseToken["access_token"], 7);
         $token = str_replace('Bearer ', '', $responseToken["access_token"]);
         $user = auth('api')->user();
 
@@ -79,7 +117,7 @@ class AuthController extends Controller
      */
     public function refresh()
     {
-        return $this->respondWithToken(auth()->refresh());
+        return $this->respondWithToken(auth('api')->refresh());
     }
 
     /**
@@ -94,7 +132,7 @@ class AuthController extends Controller
         return response()->json([
             'access_token' => $token,
             'token_type' => 'bearer',
-            'expires_in' => auth('api')->factory()->getTTL() * 60 // returns seconds
+            'expires_in' => auth('api')->factory()->getTTL() * 60 // retorna o tempo em segundos
         ]);
     }
 }
